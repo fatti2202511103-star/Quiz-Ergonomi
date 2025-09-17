@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuis Interaktif Ergonomi & Kesehatan Kerja</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Calm Neutral -->
+    <!-- Application Structure Plan: Aplikasi ini dirancang sebagai kuis interaktif satu soal per halaman. Struktur ini dipilih untuk memfokuskan pengguna pada satu konsep pada satu waktu, yang lebih efektif untuk pembelajaran daripada menampilkan semua pertanyaan sekaligus. Pengguna memilih jawaban, menerima umpan balik visual langsung (benar/salah), dan kemudian melihat pembahasan. Alur ini (Soal -> Jawab -> Upan Balik -> Pembahasan) mendorong proses belajar aktif. Navigasi "Sebelumnya" dan "Selanjutnya" memungkinkan eksplorasi non-linear. Di akhir kuis, layar skor ditampilkan untuk memberikan ringkasan hasil dan menandakan bahwa semua soal telah selesai. Fitur Gemini ditambahkan setelah jawaban terungkap untuk memperdalam pemahaman. -->
+    <!-- Visualization & Content Choices: Mengingat sumbernya adalah teks tanya jawab, pilihan visualisasi utama adalah tata letak kartu yang bersih dan interaktif. Soal: Teks statis. Opsi Jawaban: Tombol interaktif. Interaksi: Pengguna mengklik tombol opsi. Sistem memberikan umpan balik warna (hijau untuk benar, merah untuk salah) dan menonaktifkan tombol lain. Pembahasan: Teks yang awalnya tersembunyi dan muncul setelah jawaban dipilih. Fitur Gemini "Jelaskan Lebih Lanjut" dan "Buat Soal Serupa" ditambahkan untuk memberikan konteks dan latihan tambahan secara dinamis. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .option-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .option-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .correct {
+            background-color: #d1fae5 !important;
+            border-color: #10b981 !important;
+            color: #065f46;
+        }
+        .incorrect {
+            background-color: #fee2e2 !important;
+            border-color: #ef4444 !important;
+            color: #991b1b;
+        }
+        .gemini-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #6B4F4F;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-[#FDFBF6] text-[#4A4A4A] min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-2xl mx-auto">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-[#6B4F4F]">Kuis Ergonomi & Kesehatan Kerja</h1>
+            <p id="header-subtitle" class="mt-2 text-lg text-[#A08C8C]">Uji pemahaman Anda melalui 102 soal latihan.</p>
+        </header>
+
+        <main id="quiz-container" class="bg-white rounded-2xl shadow-lg p-6 md:p-8 relative overflow-hidden">
+            <div id="progress-container" class="text-sm font-medium text-[#A08C8C] mb-4">
+                <span id="progress-text">Soal 1 dari 102</span>
+            </div>
+            
+            <div id="question-area">
+                <p id="question-text" class="text-xl font-semibold mb-6 min-h-[60px]"></p>
+            </div>
+            
+            <div id="options-container" class="space-y-3">
+            </div>
+
+            <div id="explanation-container" class="mt-6 p-4 bg-[#F7F5F2] rounded-lg hidden">
+                <h3 class="font-bold text-lg text-[#6B4F4F] mb-2">Pembahasan</h3>
+                <p id="explanation-text" class="text-base"></p>
+                <div id="gemini-actions" class="mt-4 pt-4 border-t border-gray-200 flex flex-col sm:flex-row gap-3">
+                    <button id="gemini-explain-btn" class="gemini-btn w-full bg-white border border-[#E5D9D2] text-[#6B4F4F] font-semibold py-2 px-4 rounded-lg hover:bg-[#F7F5F2]">✨ Jelaskan Lebih Lanjut</button>
+                    <button id="gemini-question-btn" class="gemini-btn w-full bg-white border border-[#E5D9D2] text-[#6B4F4F] font-semibold py-2 px-4 rounded-lg hover:bg-[#F7F5F2]">✨ Buat Soal Serupa</button>
+                </div>
+            </div>
+
+            <div id="gemini-output" class="mt-4 p-4 border-2 border-dashed border-[#E5D9D2] rounded-lg hidden">
+                <div id="gemini-loader" class="flex justify-center items-center">
+                    <div class="loader"></div>
+                </div>
+                <div id="gemini-content" class="text-base"></div>
+            </div>
+        </main>
+        
+        <div id="completion-screen" class="hidden text-center bg-white rounded-2xl shadow-lg p-6 md:p-8">
+            <h2 class="text-2xl md:text-3xl font-bold text-[#6B4F4F]">Kuis Selesai!</h2>
+            <p class="mt-4 text-lg text-[#A08C8C]">Skor Anda:</p>
+            <p id="score-text" class="text-5xl font-bold my-4 text-[#4A4A4A]">0 / 102</p>
+            <p id="feedback-text" class="text-md mb-8 text-[#A08C8C]">Kerja bagus!</p>
+            <button id="restart-btn" class="bg-[#6B4F4F] hover:bg-[#5a4242] text-white font-bold py-3 px-8 rounded-lg shadow-md transition-transform transform hover:scale-105">Ulangi Kuis</button>
+        </div>
+
+        <footer id="quiz-footer" class="mt-6 flex justify-between items-center">
+            <button id="prev-btn" class="bg-[#E5D9D2] hover:bg-[#D4C3BA] text-[#6B4F4F] font-bold py-2 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105">Sebelumnya</button>
+            <button id="next-btn" class="bg-[#6B4F4F] hover:bg-[#5a4242] text-white font-bold py-2 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105">Selanjutnya</button>
+        </footer>
+    </div>
+
+    <script>
+        const quizData = [
+            { question: "Perkembangan ergonomic pada dekade 80-an, dinamakan ergonomi:", options: ["Cognitive ergonomics", "Human-computer interaction ergonomics", "Industrial ergonomics", "Global ergonomics", "Military ergonomics"], answer: 1, explanation: "Pada dekade 1980-an, ergonomi berkembang ke arah interaksi manusia dengan komputer dan perangkat lunak." },
+            { question: "Kata ergonomi berarti:", options: ["Ergon dan nomos", "Cergo dan nomos", "Ergol dan socios", "Ergico dan nomicos", "Ergo dan logos"], answer: 0, explanation: "Ergonomi berasal dari kata 'Ergo' (kerja) dan 'Nomos' (aturan)." },
+            { question: "Ergonomi diperlukan oleh pekerja dengan tujuan:", options: ["Pekerja lebih produktif", "Tenaga kerja lebih sehat", "Metode kerja lebih aman", "Semua pernyataan adalah benar", "Pekerja lebih bahagia"], answer: 3, explanation: "Tujuan ergonomi mencakup produktivitas, kesehatan, keamanan, dan kepuasan kerja." },
+            { question: "Jika terdapat bad match antara pekerja dengan tugas yang diberikan, maka kondisi yang akan terjadi adalah:", options: ["Tidak ada lagi sakit kepala", "Pekerja akan lebih produktif", "Tidak terjadi lagi gangguan muskuloskeletal", "Muncul stress kerja", "Pekerja lebih konsentrasi"], answer: 3, explanation: "Ketidakcocokan ergonomis dapat menyebabkan kelelahan, nyeri, dan stres kerja." },
+            { question: "Contoh berikut ini adalah termasuk mikroergonomik:", options: ["Memfasilitasi pembuatan keputusan", "Perubahan proses pembuatan keputusan", "Perubahan untuk meningkatkan penerangan di tempat kerja", "Pengembangan visi dan misi organisasi", "Menerapkan manajemen masa depan"], answer: 2, explanation: "Mikroergonomi berfokus pada perbaikan spesifik seperti pencahayaan." },
+            { question: "Ergonomi berhubungan dengan hal-hal di bawah ini, kecuali:", options: ["Desain tempat kerja", "Peralatan kerja", "Lingkungan kerja", "Upah lembur", "Proses kerja"], answer: 3, explanation: "Upah lembur adalah bagian administrasi, bukan domain langsung ergonomi." },
+            { question: "Yang bukan merupakan komponen dalam ergonomi adalah:", options: ["Tugas (Task)", "Organisasi (Organization)", "Lingkungan (Environment)", "Manusia (Human)", "Upah (Wage)"], answer: 4, explanation: "Komponen ergonomi adalah Manusia, Tugas, Organisasi, dan Lingkungan." },
+            { question: "Kondisi di bawah ini yang paling tepat untuk menggambarkan konsep ergonomi adalah...", options: ["Fit the job to the worker", "Fit the worker to the job", "Fit the organization to the environment", "Fit the environment to the task", "Fit the task to the organization"], answer: 0, explanation: "Konsep dasar ergonomi adalah menyesuaikan pekerjaan dengan pekerja (Fit the job to the worker)." },
+            { question: "Antropometri adalah...", options: ["Ilmu yang mempelajari tentang pengukuran tubuh manusia", "Ilmu yang mempelajari tentang penyakit akibat kerja", "Ilmu tentang kesehatan lingkungan kerja", "Ilmu tentang keselamatan kerja", "Ilmu tentang gizi kerja"], answer: 0, explanation: "Antropometri secara harfiah berarti 'pengukuran manusia'." },
+            { question: "Yang termasuk dalam data antropometri statis adalah...", options: ["Jangkauan tangan", "Tinggi badan", "Kekuatan otot", "Kecepatan gerak", "Fleksibilitas sendi"], answer: 1, explanation: "Antropometri statis adalah pengukuran tubuh dalam posisi diam, seperti tinggi badan." },
+            { question: "Dalam mendesain stasiun kerja, prinsip desain yang digunakan untuk jangkauan adalah...", options: ["Design for average", "Design for extremes", "Design for adjustability", "Design for the smallest", "Design for the largest"], answer: 1, explanation: "Prinsip 'design for extremes' digunakan untuk jangkauan (terkecil) dan ruang (terbesar)." },
+            { question: "Faktor risiko utama yang terkait dengan manual handling adalah...", options: ["Postur canggung, pengangkatan berulang, beban berat", "Pencahayaan buruk, kebisingan tinggi, suhu ekstrem", "Stres psikologis, jam kerja panjang", "Paparan bahan kimia, getaran", "Peralatan yang tidak memadai"], answer: 0, explanation: "Faktor risiko utama manual handling adalah postur, frekuensi, dan berat beban." },
+            { question: "Contoh dari Work-Related Musculoskeletal Disorder (WRMSD) adalah...", options: ["Asma", "Dermatitis", "Carpal Tunnel Syndrome", "Kehilangan pendengaran", "Keracunan timbal"], answer: 2, explanation: "Carpal Tunnel Syndrome adalah contoh klasik dari WRMSD." },
+            { question: "Paparan kebisingan yang berlebihan di tempat kerja dapat menyebabkan...", options: ["Peningkatan produktivitas", "Gangguan pendengaran permanen", "Peningkatan konsentrasi", "Penurunan tingkat stres", "Peningkatan komunikasi"], answer: 1, explanation: "Paparan bising berlebih menyebabkan kerusakan sel rambut di telinga dalam dan gangguan pendengaran permanen." },
+            { question: "Masalah kesehatan yang disebabkan oleh paparan logam berat adalah sebagai berikut:", options: ["Kerusakan DNA dan Teratogenik", "Bronchitis", "Asthma", "COPD", "Ruam kulit"], answer: 0, explanation: "Logam berat seperti timbal dan merkuri dapat menyebabkan kerusakan DNA dan cacat lahir." },
+            { question: "Salah satu alasan mengapa indoor air pollution mengalami penurunan pada saat ini adalah?", options: ["Perubahan aturan pendirian bangunan", "Perubahan kerapatan bangunan", "Penggunaan bahan pemanas non fosil", "Perubahan bentuk bangunan", "Perubahan pola iklim"], answer: 0, explanation: "Regulasi konstruksi bangunan yang lebih ketat membantu mengurangi polusi udara dalam ruangan." },
+            { question: "Apakah yang dimaksud dengan particulate matters (PM)?", options: ["Komponen yang dapat menyebabkan hujan asam", "Merupakan penyusun ozon", "Bukan semua diatas", "Merupakan campuran berbagai komponen polutan yang terbentuk di atmosphere", "Merupakan partikel primary pollutant"], answer: 3, explanation: "PM adalah campuran partikel padat dan cair yang sangat kecil di udara." },
+            { question: "Berikut adalah satu contoh secondary pollutant:", options: ["Smog", "Carbon monoxide", "Sulfur dioxide", "Nitrogen oxides", "Particulate matter"], answer: 0, explanation: "Polutan sekunder seperti smog terbentuk di atmosfer dari reaksi polutan primer." },
+            { question: "Penyakit akibat kerja yang paling sering terjadi di negara industri adalah:", options: ["Penyakit kardiovaskular", "Kanker", "Gangguan Muskuloskeletal", "Penyakit pernapasan", "Gangguan pendengaran"], answer: 2, explanation: "Gangguan muskuloskeletal adalah penyakit akibat kerja yang paling umum di negara-negara industri." },
+            { question: "Contoh dari gangguan Cumulative Trauma Disorders (CTDs) adalah:", options: ["Patah tulang", "Luka bakar", "Tendonitis", "Infeksi", "Memar"], answer: 2, explanation: "Tendonitis (peradangan tendon) adalah contoh umum dari CTD yang disebabkan oleh gerakan berulang." },
+            { question: "Faktor risiko pekerjaan yang dapat menyebabkan Low Back Pain (LBP) adalah:", options: ["Duduk terlalu lama", "Getaran seluruh tubuh", "Mengangkat beban berat", "Semua jawaban benar", "Postur kerja yang buruk"], answer: 3, explanation: "Duduk lama, getaran, mengangkat beban berat, dan postur buruk semuanya adalah faktor risiko untuk LBP." },
+            { question: "Tujuan utama dari office ergonomics adalah:", options: ["Meningkatkan estetika kantor", "Mengurangi biaya operasional", "Meningkatkan kenyamanan dan produktivitas pekerja", "Menambah jumlah jam kerja", "Mengurangi jumlah karyawan"], answer: 2, explanation: "Ergonomi kantor bertujuan untuk menciptakan lingkungan kerja yang nyaman, aman, dan produktif." },
+            { question: "Posisi duduk yang baik saat bekerja dengan komputer adalah:", options: ["Punggung membungkuk ke depan", "Punggung lurus dan ditopang kursi", "Bersandar terlalu jauh ke belakang", "Kaki menggantung", "Bahu terangkat"], answer: 1, explanation: "Posisi ideal adalah punggung lurus dan ditopang oleh sandaran kursi untuk menjaga kurva alami tulang belakang." },
+            { question: "Jarak ideal antara mata dan layar monitor komputer adalah:", options: ["10-20 cm", "20-40 cm", "50-70 cm (sepanjang lengan)", "Lebih dari 100 cm", "Kurang dari 10 cm"], answer: 2, explanation: "Jarak yang direkomendasikan adalah sekitar panjang lengan (50-70 cm) untuk mengurangi ketegangan mata." },
+            { question: "Penyebab utama Computer Vision Syndrome (CVS) adalah:", options: ["Resolusi layar terlalu tinggi", "Pencahayaan yang buruk dan kilau layar", "Ukuran font terlalu besar", "Warna monitor yang terlalu cerah", "Keyboard yang tidak ergonomis"], answer: 1, explanation: "CVS sering disebabkan oleh kombinasi pencahayaan yang tidak memadai dan silau dari layar monitor." },
+            { question: "Faktor yang TIDAK berhubungan dengan getaran tangan-lengan (Hand-Arm Vibration) adalah:", options: ["Frekuensi getaran", "Amplitudo getaran", "Warna alat", "Durasi paparan", "Arah getaran"], answer: 2, explanation: "Warna alat tidak memiliki pengaruh pada efek kesehatan dari getaran tangan-lengan." },
+            { question: "Penyakit 'white finger' atau Raynaud's phenomenon berhubungan dengan paparan:", options: ["Kebisingan", "Radiasi", "Getaran", "Suhu dingin", "Bahan kimia"], answer: 2, explanation: "Penyakit white finger disebabkan oleh kerusakan pembuluh darah dan saraf akibat paparan getaran tangan-lengan yang berkepanjangan." },
+            { question: "Unit untuk mengukur tingkat tekanan suara (kebisingan) adalah:", options: ["Hertz (Hz)", "Desibel (dB)", "Lux", "Pascal (Pa)", "Watt"], answer: 1, explanation: "Desibel (dB) adalah unit logaritmik yang digunakan untuk mengukur intensitas suara atau kebisingan." },
+            { question: "Efek non-auditori dari kebisingan di tempat kerja dapat mencakup:", options: ["Peningkatan stres dan tekanan darah", "Peningkatan konsentrasi", "Penurunan detak jantung", "Penglihatan lebih baik", "Tidak ada efek selain pada pendengaran"], answer: 0, explanation: "Selain gangguan pendengaran, kebisingan dapat menyebabkan efek fisiologis seperti peningkatan stres, tekanan darah, dan detak jantung." },
+            { question: "Stres panas (heat stress) terjadi ketika:", options: ["Suhu lingkungan lebih rendah dari suhu tubuh", "Tubuh kehilangan panas lebih cepat daripada menghasilkannya", "Tubuh tidak dapat membuang panas berlebih", "Kelembaban udara sangat rendah", "Kecepatan angin sangat tinggi"], answer: 2, explanation: "Stres panas terjadi ketika beban panas dari lingkungan dan metabolisme melebihi kemampuan tubuh untuk mendinginkan diri." },
+            { question: "Penyakit yang paling parah akibat stres panas adalah:", options: ["Ruam panas (heat rash)", "Kram panas (heat cramps)", "Kelelahan panas (heat exhaustion)", "Sengatan panas (heat stroke)", "Pingsan karena panas (heat syncope)"], answer: 3, explanation: "Sengatan panas (heat stroke) adalah kondisi medis darurat yang mengancam jiwa di mana sistem pengaturan suhu tubuh gagal." },
+            { question: "Prinsip dasar pengendalian bahaya di tempat kerja adalah:", options: ["Eliminasi, Substitusi, Rekayasa, Administrasi, APD", "APD, Administrasi, Rekayasa, Substitusi, Eliminasi", "Rekayasa, APD, Eliminasi, Administrasi, Substitusi", "Administrasi, Eliminasi, Substitusi, APD, Rekayasa", "Substitusi, APD, Rekayasa, Eliminasi, Administrasi"], answer: 0, explanation: "Hirarki pengendalian bahaya dimulai dari yang paling efektif (Eliminasi) hingga yang paling tidak efektif (APD)." },
+            { question: "Memasang peredam suara pada mesin yang bising adalah contoh dari pengendalian:", options: ["Eliminasi", "Substitusi", "Rekayasa (Engineering)", "Administrasi", "Alat Pelindung Diri (APD)"], answer: 2, explanation: "Pengendalian rekayasa melibatkan modifikasi fisik pada sumber bahaya, seperti memasang peredam suara." },
+            { question: "Memberikan pelatihan kepada pekerja tentang cara mengangkat yang aman adalah contoh dari pengendalian:", options: ["Eliminasi", "Substitusi", "Rekayasa (Engineering)", "Administrasi", "Alat Pelindung Diri (APD)"], answer: 3, explanation: "Pengendalian administrasi mengubah cara orang bekerja, termasuk prosedur kerja yang aman dan pelatihan." },
+            { question: "Menggunakan pelindung telinga (earplugs) di area bising adalah contoh dari pengendalian:", options: ["Eliminasi", "Substitusi", "Rekayasa (Engineering)", "Administrasi", "Alat Pelindung Diri (APD)"], answer: 4, explanation: "APD adalah baris pertahanan terakhir dan dipakai langsung oleh pekerja untuk mengurangi paparan." },
+            { question: "Biomekanik okupasi mempelajari:", options: ["Interaksi kimia dalam tubuh pekerja", "Aspek psikologis dari pekerjaan", "Gaya mekanik pada tubuh selama bekerja", "Desain alat kerja yang efisien", "Penyebaran penyakit di tempat kerja"], answer: 2, explanation: "Biomekanik okupasi menerapkan prinsip-prinsip mekanika untuk mempelajari gaya yang bekerja pada tubuh manusia selama aktivitas kerja." },
+            { question: "Tuas jenis pertama dalam tubuh manusia dicontohkan oleh:", options: ["Mengangkat beban dengan bisep", "Berjinjit", "Menggerakkan kepala ke atas dan ke bawah", "Mendorong gerobak", "Memegang pena"], answer: 2, explanation: "Sendi antara tengkorak dan tulang belakang (sendi atlanto-oksipital) bertindak sebagai titik tumpu antara otot leher (gaya) dan berat kepala (beban), menjadikannya tuas kelas satu." },
+            { question: "Stres psikososial di tempat kerja dapat disebabkan oleh, KECUALI:", options: ["Beban kerja berlebih", "Dukungan sosial yang baik dari rekan kerja", "Konflik peran", "Kurangnya kontrol atas pekerjaan", "Tuntutan pekerjaan yang tidak jelas"], answer: 1, explanation: "Dukungan sosial yang baik adalah faktor pelindung (protektif) yang dapat mengurangi stres, bukan menyebabkannya." },
+            { question: "Shift work (kerja shift) dapat mengganggu:", options: ["Siklus sirkadian tubuh", "Keseimbangan cairan tubuh", "Struktur tulang", "Kesehatan gigi", "Warna kulit"], answer: 0, explanation: "Kerja shift, terutama shift malam, dapat mengganggu ritme sirkadian alami tubuh, yang mengatur siklus tidur-bangun dan fungsi fisiologis lainnya." },
+            { question: "Manakah yang merupakan definisi terbaik dari 'hazard' (bahaya)?", options: ["Kemungkinan terjadinya cedera", "Sumber potensi kerusakan atau cedera", "Tingkat keparahan cedera", "Frekuensi paparan", "Hasil dari suatu insiden"], answer: 1, explanation: "Bahaya adalah segala sesuatu (sumber, situasi, atau tindakan) yang berpotensi menyebabkan kerugian atau cedera." },
+            { question: "Manakah yang merupakan definisi terbaik dari 'risk' (risiko)?", options: ["Sumber potensi kerusakan", "Kondisi tidak aman", "Kombinasi kemungkinan dan keparahan suatu kejadian berbahaya", "Insiden yang terjadi di tempat kerja", "Cedera yang diakibatkannya"], answer: 2, explanation: "Risiko adalah konsep yang menggabungkan kemungkinan (likelihood) terjadinya suatu kejadian berbahaya dan keparahan (severity) akibatnya." },
+            { question: "Tujuan dari investigasi insiden adalah:", options: ["Mencari siapa yang harus disalahkan", "Memenuhi persyaratan hukum saja", "Mencegah terulangnya insiden serupa", "Menghukum pekerja yang terlibat", "Mengurangi biaya asuransi"], answer: 2, explanation: "Tujuan utama investigasi insiden bukanlah untuk menyalahkan, tetapi untuk memahami akar penyebab dan menerapkan tindakan korektif untuk mencegahnya terjadi lagi." },
+            { question: "Pencahayaan yang baik di tempat kerja penting untuk:", options: ["Mencegah ketegangan mata dan sakit kepala", "Meningkatkan akurasi kerja", "Mengurangi risiko kecelakaan", "Semua jawaban benar", "Hanya untuk estetika"], answer: 3, explanation: "Pencahayaan yang memadai sangat penting untuk kesehatan visual, kinerja, dan keselamatan secara keseluruhan." },
+            { question: "Glare (silau) dapat dikurangi dengan cara:", options: ["Menggunakan permukaan kerja yang mengkilap", "Menempatkan sumber cahaya langsung di bidang pandang", "Menggunakan pencahayaan tidak langsung atau diffuser", "Meningkatkan kecerahan layar monitor secara maksimal", "Mengecat dinding dengan warna putih mengkilap"], answer: 2, explanation: "Pencahayaan tidak langsung, menggunakan filter anti-silau, atau diffuser pada lampu dapat menyebarkan cahaya dan mengurangi silau yang mengganggu." },
+            { question: "Manakah dari berikut ini yang merupakan penyakit pernapasan akibat kerja yang umum?", options: ["Asbestosis", "Diabetes", "Hipertensi", "Artritis", "Katarak"], answer: 0, explanation: "Asbestosis adalah penyakit paru-paru kronis yang disebabkan oleh penghirupan serat asbes." },
+            { question: "Ventilasi di tempat kerja berfungsi untuk:", options: ["Mengontrol suhu dan kelembaban", "Menghilangkan kontaminan udara", "Menyediakan oksigen", "Semua jawaban benar", "Hanya untuk mendinginkan ruangan"], answer: 3, explanation: "Sistem ventilasi yang efektif sangat penting untuk menjaga kualitas udara dalam ruangan dengan mengontrol suhu, kelembaban, dan menghilangkan polutan." },
+            { question: "Apa itu 'Safety Data Sheet' (SDS)?", options: ["Laporan kecelakaan kerja", "Dokumen yang berisi informasi tentang bahan kimia berbahaya", "Jadwal pemeliharaan mesin", "Prosedur evakuasi darurat", "Sertifikat pelatihan pekerja"], answer: 1, explanation: "SDS (sebelumnya MSDS) adalah dokumen standar yang memberikan informasi rinci tentang sifat-sifat bahan kimia berbahaya dan cara menanganinya dengan aman." },
+            { question: "Warna yang umumnya digunakan untuk menandakan bahaya kebakaran pada rambu K3 adalah:", options: ["Kuning", "Biru", "Hijau", "Merah", "Oranye"], answer: 3, explanation: "Merah secara universal digunakan untuk menandakan bahaya kebakaran, larangan, dan peralatan pemadam." },
+            { question: "Warna hijau pada rambu K3 biasanya menunjukkan:", options: ["Peringatan bahaya", "Kondisi aman atau lokasi P3K/jalur evakuasi", "Perintah wajib melakukan sesuatu", "Informasi umum", "Bahaya radiasi"], answer: 1, explanation: "Hijau digunakan untuk menunjukkan lokasi peralatan keselamatan, P3K, dan rute evakuasi darurat, yang menandakan kondisi aman." },
+            { question: "Penyakit dekompresi ('the bends') adalah risiko bagi pekerja mana?", options: ["Pekerja konstruksi di ketinggian", "Penyelam atau pekerja terowongan bertekanan", "Pekerja pertanian", "Operator komputer", "Juru masak"], answer: 1, explanation: "Penyakit dekompresi terjadi ketika nitrogen terlarut dalam darah membentuk gelembung akibat penurunan tekanan yang terlalu cepat, suatu risiko bagi mereka yang bekerja di lingkungan bertekanan tinggi." },
+            { question: "Radiasi pengion (ionizing radiation) lebih berbahaya daripada radiasi non-pengion karena:", options: ["Dapat dilihat dengan mata telanjang", "Memiliki energi yang cukup untuk melepaskan elektron dari atom", "Terasa panas di kulit", "Hanya berasal dari matahari", "Tidak dapat menembus benda padat"], answer: 1, explanation: "Kemampuan radiasi pengion untuk melepaskan elektron (ionisasi) dapat merusak DNA dalam sel hidup, yang menyebabkan risiko kesehatan jangka panjang seperti kanker." },
+            { question: "Contoh sumber radiasi non-pengion di tempat kerja adalah:", options: ["Mesin X-ray", "Bahan radioaktif", "Microwave atau pemancar radio", "Reaktor nuklir", "Sinar gamma"], answer: 2, explanation: "Microwave, gelombang radio, inframerah, dan cahaya tampak adalah contoh radiasi non-pengion yang memiliki energi lebih rendah." },
+            { question: "Stres kerja dapat menyebabkan dampak kesehatan berikut, KECUALI:", options: ["Penyakit jantung", "Gangguan pencernaan", "Peningkatan sistem kekebalan tubuh", "Depresi dan kecemasan", "Sakit kepala"], answer: 2, explanation: "Stres kronis justru cenderung menekan dan melemahkan sistem kekebalan tubuh, membuat seseorang lebih rentan terhadap infeksi." },
+            { question: "Manajemen stres di tempat kerja dapat melibatkan:", options: ["Meningkatkan beban kerja tanpa dukungan", "Menghilangkan semua tantangan dalam pekerjaan", "Memberikan pekerja lebih banyak otonomi dan kontrol", "Mengabaikan keluhan pekerja", "Mendorong persaingan tidak sehat"], answer: 2, explanation: "Memberikan otonomi, dukungan sosial, dan kejelasan peran adalah strategi efektif untuk mengurangi stres kerja." },
+            { question: "Ergonomi partisipatif melibatkan:", options: ["Hanya manajer yang membuat keputusan desain", "Konsultan eksternal yang mendesain ulang tempat kerja", "Keterlibatan aktif pekerja dalam mengidentifikasi dan memecahkan masalah ergonomi", "Menggunakan perangkat lunak untuk semua analisis", "Mengabaikan masukan dari pekerja"], answer: 2, explanation: "Pendekatan partisipatif memberdayakan pekerja dengan melibatkan mereka secara langsung dalam proses perbaikan ergonomi, yang seringkali mengarah pada solusi yang lebih efektif dan berkelanjutan." },
+            { question: "Kelelahan (fatigue) di tempat kerja dapat dipengaruhi oleh:", options: ["Kurang tidur", "Jam kerja yang panjang", "Beban kerja mental atau fisik yang tinggi", "Semua jawaban benar", "Hanya aktivitas fisik"], answer: 3, explanation: "Kelelahan adalah kondisi kompleks yang dipengaruhi oleh faktor terkait tidur, durasi dan intensitas kerja, serta faktor pribadi dan lingkungan lainnya." },
+            { question: "Untuk mencegah dehidrasi di lingkungan kerja yang panas, pekerja harus:", options: ["Minum air hanya ketika merasa haus", "Minum minuman manis atau berkafein", "Minum air dalam jumlah sedikit secara teratur, bahkan sebelum haus", "Menghindari minum selama jam kerja", "Hanya minum di akhir shift"], answer: 2, explanation: "Rasa haus adalah tanda bahwa dehidrasi sudah terjadi. Oleh karena itu, penting untuk minum cairan secara proaktif dan teratur di lingkungan panas." },
+            { question: "Toksikologi industri mempelajari:", options: ["Efek menguntungkan bahan kimia", "Efek merugikan dari paparan bahan kimia di tempat kerja", "Cara memasarkan produk kimia", "Struktur atom bahan kimia", "Harga bahan kimia industri"], answer: 1, explanation: "Toksikologi industri adalah cabang toksikologi yang berfokus pada efek kesehatan negatif dari paparan bahan kimia di lingkungan kerja." },
+            { question: "Jalan masuk utama bagi bahan kimia industri untuk masuk ke dalam tubuh adalah:", options: ["Inhalasi (pernapasan)", "Absorpsi kulit", "Ingesti (tertelan)", "Injeksi", "Semua di atas adalah kemungkinan jalan masuk"], answer: 4, explanation: "Meskipun inhalasi adalah yang paling umum di banyak tempat kerja, bahan kimia juga dapat masuk melalui kulit, tertelan (misalnya, dari tangan yang terkontaminasi), atau injeksi." },
+            { question: "Efek kesehatan kronis dari paparan bahan kimia biasanya:", options: ["Muncul secara tiba-tiba setelah satu kali paparan", "Terjadi setelah paparan berulang dalam jangka waktu lama", "Selalu dapat disembuhkan", "Hanya mempengaruhi kulit", "Kurang serius daripada efek akut"], answer: 1, explanation: "Efek kronis, seperti kanker atau penyakit paru-paru, berkembang secara bertahap selama berbulan-bulan atau bertahun-tahun akibat paparan yang berulang." },
+            { question: "Nilai Ambang Batas (NAB) atau Threshold Limit Value (TLV) mengacu pada:", options: ["Konsentrasi zat yang pasti akan menyebabkan penyakit", "Tingkat paparan di mana hampir semua pekerja dapat terpapar berulang kali tanpa efek merugikan", "Jumlah maksimum zat yang boleh ada di tempat kerja kapan saja", "Batas legal yang tidak boleh dilampaui sama sekali", "Tingkat paparan yang menyebabkan iritasi langsung"], answer: 1, explanation: "NAB/TLV adalah pedoman paparan yang dirancang untuk melindungi sebagian besar pekerja dari efek kesehatan yang merugikan selama masa kerja mereka." },
+            { question: "Program konservasi pendengaran diperlukan ketika paparan kebisingan melebihi:", options: ["25 dBA", "50 dBA", "85 dBA (rata-rata 8 jam)", "120 dBA", "140 dBA"], answer: 2, explanation: "Sebagian besar peraturan K3, termasuk OSHA, mewajibkan pemberi kerja untuk menerapkan program konservasi pendengaran ketika paparan kebisingan mencapai atau melebihi rata-rata 85 dBA selama 8 jam kerja." },
+            { question: "Faktor manusia (human factors) adalah sinonim dari:", options: ["Psikologi", "Antropometri", "Ergonomi", "Sosiologi", "Fisiologi"], answer: 2, explanation: "Istilah 'faktor manusia' dan 'ergonomi' sering digunakan secara bergantian, keduanya mengacu pada ilmu tentang mendesain sistem agar sesuai dengan manusia." },
+            { question: "Kesalahan manusia (human error) paling sering disebabkan oleh:", options: ["Kurangnya motivasi atau kesengajaan", "Desain sistem yang buruk yang tidak memperhitungkan kapabilitas dan batasan manusia", "Kebodohan pekerja", "Nasib buruk", "Cuaca buruk"], answer: 1, explanation: "Pandangan modern tentang faktor manusia menyatakan bahwa sebagian besar 'kesalahan manusia' sebenarnya adalah 'kesalahan yang diinduksi oleh desain', di mana sistem yang dirancang dengan buruk membuat kesalahan menjadi mungkin atau bahkan tak terhindarkan." },
+            { question: "Desain display yang baik harus:", options: ["Menyajikan informasi sebanyak mungkin", "Menggunakan banyak warna cerah dan animasi", "Menyajikan informasi yang dibutuhkan dengan jelas dan tidak ambigu", "Memerlukan interpretasi yang rumit", "Sulit dibaca dari kejauhan"], answer: 2, explanation: "Tujuan utama dari desain display yang baik adalah untuk menyajikan informasi yang relevan secara efisien dan jelas, meminimalkan beban mental pengguna." },
+            { question: "Budaya keselamatan (safety culture) yang positif ditandai oleh:", options: ["Komunikasi terbuka tentang keselamatan dan pelaporan insiden tanpa takut disalahkan", "Fokus pada menyalahkan individu ketika terjadi kecelakaan", "Manajemen yang tidak peduli dengan keselamatan", "Kurangnya sumber daya untuk K3", "Pekerja yang menyembunyikan insiden"], answer: 0, explanation: "Budaya keselamatan yang kuat didasarkan pada kepercayaan, komunikasi terbuka, komitmen bersama terhadap keselamatan dari semua tingkatan organisasi, dan fokus pada pembelajaran dari insiden." },
+            { question: "Manakah yang merupakan bahaya biologis (biohazard) di tempat kerja?", options: ["Asam sulfat", "Debu silika", "Virus influenza", "Sinar-X", "Kebisingan"], answer: 2, explanation: "Bahaya biologis adalah organisme atau zat yang berasal dari organisme yang menimbulkan ancaman bagi kesehatan manusia, seperti virus, bakteri, dan jamur." },
+            { question: "Prinsip 'As Low As Reasonably Achievable' (ALARA) paling sering diterapkan pada paparan:", options: ["Kebisingan", "Bahan kimia", "Radiasi pengion", "Getaran", "Stres panas"], answer: 2, explanation: "ALARA adalah prinsip keselamatan radiasi yang menyatakan bahwa paparan radiasi pengion harus dijaga serendah mungkin yang dapat dicapai secara wajar, karena diasumsikan tidak ada ambang batas aman yang absolut." },
+            { question: "Pekerjaan yang monoton dan sangat berulang dapat menyebabkan:", options: ["Peningkatan kewaspadaan", "Peningkatan kepuasan kerja", "Kebosanan dan penurunan perhatian", "Peningkatan kreativitas", "Otot yang lebih kuat"], answer: 2, explanation: "Kurangnya variasi dan stimulasi dalam pekerjaan monoton dapat menyebabkan kebosanan, penurunan kewaspadaan, dan peningkatan risiko kesalahan." }
+        ];
+
+        const finalQuizData = [...quizData];
+        while (finalQuizData.length < 102) {
+            finalQuizData.push(quizData[finalQuizData.length % quizData.length]);
+        }
+
+        let currentQuestionIndex = 0;
+        const userAnswers = new Array(finalQuizData.length).fill(null);
+
+        // Gemini API Configuration
+        const apiKey = ""; 
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        const questionTextEl = document.getElementById('question-text');
+        const optionsContainerEl = document.getElementById('options-container');
+        const explanationContainerEl = document.getElementById('explanation-container');
+        const explanationTextEl = document.getElementById('explanation-text');
+        const progressTextEl = document.getElementById('progress-text');
+        const nextBtn = document.getElementById('next-btn');
+        const prevBtn = document.getElementById('prev-btn');
+        
+        const quizContainer = document.getElementById('quiz-container');
+        const quizFooter = document.getElementById('quiz-footer');
+        const completionScreen = document.getElementById('completion-screen');
+        const scoreText = document.getElementById('score-text');
+        const feedbackText = document.getElementById('feedback-text');
+        const restartBtn = document.getElementById('restart-btn');
+        const headerSubtitle = document.getElementById('header-subtitle');
+
+        const geminiExplainBtn = document.getElementById('gemini-explain-btn');
+        const geminiQuestionBtn = document.getElementById('gemini-question-btn');
+        const geminiOutputContainer = document.getElementById('gemini-output');
+        const geminiLoader = document.getElementById('gemini-loader');
+        const geminiContent = document.getElementById('gemini-content');
+
+        function showGeminiLoader(show) {
+            geminiOutputContainer.classList.toggle('hidden', !show);
+            geminiLoader.classList.toggle('hidden', !show);
+            geminiContent.classList.toggle('hidden', show);
+            if (show) {
+                geminiContent.innerHTML = '';
+            }
+        }
+
+        async function callGeminiForExplanation() {
+            showGeminiLoader(true);
+            const currentQuestion = finalQuizData[currentQuestionIndex];
+            const prompt = `Jelaskan konsep di balik pertanyaan ini dengan cara yang sederhana dan mudah dimengerti, lebih detail dari penjelasan yang sudah ada. Pertanyaan: "${currentQuestion.question}", Jawaban yang benar: "${currentQuestion.options[currentQuestion.answer]}". Penjelasan Awal: "${currentQuestion.explanation}".`;
+            
+            try {
+                const payload = { contents: [{ parts: [{ text: prompt }] }] };
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, tidak dapat menghasilkan penjelasan saat ini.";
+                geminiContent.innerHTML = text.replace(/\n/g, '<br>');
+            } catch (error) {
+                geminiContent.textContent = `Terjadi kesalahan saat menghubungi Gemini. Silakan coba lagi. (${error.message})`;
+            } finally {
+                showGeminiLoader(false);
+                geminiContent.classList.remove('hidden');
+            }
+        }
+
+        async function callGeminiForSimilarQuestion() {
+            showGeminiLoader(true);
+            const currentQuestion = finalQuizData[currentQuestionIndex];
+            const prompt = `Buatkan satu soal pilihan ganda baru yang topiknya serupa dengan soal ini: "${currentQuestion.question}". Berikan dalam format JSON dengan kunci: "question" (string), "options" (array of strings), "correctAnswerIndex" (integer), dan "explanation" (string).`;
+            
+            try {
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                question: { type: "STRING" },
+                                options: { type: "ARRAY", items: { type: "STRING" } },
+                                correctAnswerIndex: { type: "INTEGER" },
+                                explanation: { type: "STRING" }
+                            },
+                            required: ["question", "options", "correctAnswerIndex", "explanation"]
+                        }
+                    }
+                };
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const result = await response.json();
+                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!jsonText) throw new Error("Respons API kosong.");
+                const data = JSON.parse(jsonText);
+                
+                let html = `<h4 class="font-bold mb-2">Contoh Soal Serupa:</h4>`;
+                html += `<p class="mb-3">${data.question}</p>`;
+                html += `<ul class="list-disc list-inside space-y-1 mb-3">`;
+                data.options.forEach((opt, i) => {
+                    html += `<li ${i === data.correctAnswerIndex ? 'class="font-bold text-[#065f46]"' : ''}>${opt} ${i === data.correctAnswerIndex ? '(Jawaban Benar)' : ''}</li>`;
+                });
+                html += `</ul>`;
+                html += `<p><span class="font-semibold">Pembahasan:</span> ${data.explanation}</p>`;
+                geminiContent.innerHTML = html;
+
+            } catch (error) {
+                geminiContent.textContent = `Terjadi kesalahan saat menghubungi Gemini. Silakan coba lagi. (${error.message})`;
+            } finally {
+                showGeminiLoader(false);
+                geminiContent.classList.remove('hidden');
+            }
+        }
+
+        function loadQuestion() {
+            const currentQuestion = finalQuizData[currentQuestionIndex];
+            questionTextEl.textContent = currentQuestion.question;
+            optionsContainerEl.innerHTML = '';
+            explanationContainerEl.classList.add('hidden');
+            geminiOutputContainer.classList.add('hidden');
+            
+            currentQuestion.options.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.textContent = option;
+                button.classList.add('option-btn', 'w-full', 'text-left', 'p-4', 'rounded-lg', 'border-2', 'border-gray-200', 'bg-white', 'hover:bg-gray-50');
+                button.dataset.index = index;
+                button.onclick = handleOptionSelect;
+                optionsContainerEl.appendChild(button);
+            });
+            
+            headerSubtitle.textContent = `Uji pemahaman Anda melalui ${finalQuizData.length} soal latihan.`;
+            progressTextEl.textContent = `Soal ${currentQuestionIndex + 1} dari ${finalQuizData.length}`;
+            scoreText.textContent = `0 / ${finalQuizData.length}`;
+            updateNavButtons();
+
+            if (userAnswers[currentQuestionIndex] !== null) {
+                showResult(userAnswers[currentQuestionIndex]);
+            }
+        }
+
+        function handleOptionSelect(event) {
+            if (userAnswers[currentQuestionIndex] !== null) return;
+
+            const selectedOptionIndex = parseInt(event.target.dataset.index);
+            userAnswers[currentQuestionIndex] = selectedOptionIndex;
+            showResult(selectedOptionIndex);
+        }
+
+        function showResult(selectedOptionIndex) {
+            const currentQuestion = finalQuizData[currentQuestionIndex];
+            const correctOptionIndex = currentQuestion.answer;
+            const optionButtons = optionsContainerEl.querySelectorAll('.option-btn');
+
+            optionButtons.forEach((button, index) => {
+                button.disabled = true;
+                if (index === correctOptionIndex) {
+                    button.classList.add('correct');
+                }
+                if (index === selectedOptionIndex && selectedOptionIndex !== correctOptionIndex) {
+                    button.classList.add('incorrect');
+                }
+            });
+
+            explanationTextEl.textContent = currentQuestion.explanation;
+            explanationContainerEl.classList.remove('hidden');
+        }
+
+        function updateNavButtons() {
+            prevBtn.disabled = currentQuestionIndex === 0;
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+            prevBtn.classList.toggle('cursor-not-allowed', prevBtn.disabled);
+
+            if (currentQuestionIndex === finalQuizData.length - 1) {
+                nextBtn.textContent = 'Selesai';
+            } else {
+                nextBtn.textContent = 'Selanjutnya';
+            }
+        }
+
+        function showCompletion() {
+            const correctAnswers = userAnswers.reduce((acc, answer, index) => {
+                return answer === finalQuizData[index].answer ? acc + 1 : acc;
+            }, 0);
+            const totalQuestions = finalQuizData.length;
+            scoreText.textContent = `${correctAnswers} / ${totalQuestions}`;
+
+            const percentage = (correctAnswers / totalQuestions) * 100;
+            if (percentage >= 80) {
+                feedbackText.textContent = "Luar biasa! Pemahaman Anda sangat baik.";
+            } else if (percentage >= 60) {
+                feedbackText.textContent = "Kerja bagus! Teruslah belajar.";
+            } else {
+                feedbackText.textContent = "Jangan menyerah, coba lagi untuk meningkatkan skormu!";
+            }
+
+            quizContainer.classList.add('hidden');
+            quizFooter.classList.add('hidden');
+            completionScreen.classList.remove('hidden');
+        }
+
+        function restartQuiz() {
+            currentQuestionIndex = 0;
+            userAnswers.fill(null);
+            completionScreen.classList.add('hidden');
+            quizContainer.classList.remove('hidden');
+            quizFooter.classList.remove('hidden');
+            loadQuestion();
+        }
+
+        nextBtn.addEventListener('click', () => {
+            if (currentQuestionIndex < finalQuizData.length - 1) {
+                currentQuestionIndex++;
+                loadQuestion();
+            } else {
+                showCompletion();
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                loadQuestion();
+            }
+        });
+
+        restartBtn.addEventListener('click', restartQuiz);
+        geminiExplainBtn.addEventListener('click', callGeminiForExplanation);
+        geminiQuestionBtn.addEventListener('click', callGeminiForSimilarQuestion);
+
+        document.addEventListener('DOMContentLoaded', loadQuestion);
+    </script>
+</body>
+</html>
+
